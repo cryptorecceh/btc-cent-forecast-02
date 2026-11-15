@@ -46,6 +46,14 @@ Validation (measured before submission, 2026-11-15):
     MAE 48,952.7 vs persistence 47,054.7 - the momentum branch did not fire
     there (vol too high), so it equals the v1 fade on that window; not worse
     than the already-submitted v1 entry on the exact house series.
+  - Revision 2026-11-15 (second write): v240 is now computed from the last
+    241 closes only (was: the whole 4,320-close window) - identical outputs,
+    verified by re-running the practice kit (6/6 valid, practice MAE
+    unchanged at 48,952.7). The model itself is unchanged: 20+ parameter
+    variants tested after the first draft (threshold 0.85-1.25, momentum
+    weights, fade weights, soft blends) all worsened the final-relevant
+    metrics (recent-window win rate, practice MAE, or both), so no parameter
+    change was made.
   - The v2 is submitted because the final (17-19 Nov) starts two days after
     this downtrend, and the model's recent-window edge is the best available
     signal. Backtest code and full results: see BACKTEST.md in this repo.
@@ -115,8 +123,11 @@ def forecast(prices):
     r1440 = math.log(last / at(1440))
 
     # Realized volatility of the 1-minute log returns over the last 240 minutes.
-    log_returns = [math.log(prices[i] / prices[i - 1]) for i in range(1, len(prices))]
-    v240 = statistics.pstdev(log_returns[-240:]) if len(log_returns) >= 2 else 0.0
+    # Only the last 241 closes feed it, so take them first: the whole window's
+    # 4,319 logs are wasted work for 240 used values (identical result).
+    tail = prices[-241:] if len(prices) > 241 else prices
+    log_returns = [math.log(tail[i] / tail[i - 1]) for i in range(1, len(tail))]
+    v240 = statistics.pstdev(log_returns) if len(log_returns) >= 2 else 0.0
     tstat = abs(r1440) / (v240 * math.sqrt(1440) + 1e-12)
 
     if tstat > TSTAT_THRESHOLD:
